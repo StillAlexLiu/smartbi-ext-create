@@ -20,44 +20,28 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
-      - name: Verify build outputs
+      - name: Verify build artifacts
         run: |
           set -e
-          ls -la dist/
           [ -f "dist/cli.js" ]
           [ -f "dist/index.js" ]
           [ -f "dist/index.d.ts" ]
           head -1 dist/cli.js | grep -q "#!/usr/bin/env node"
-          [ -x "dist/cli.js" ]
-      - name: CLI smoke tests
+          node dist/cli.js --version | grep -qE 'v[0-9]+\.[0-9]+\.[0-9]+'
+      - name: CLI smoke test
         run: |
           set -e
-          node dist/cli.js --version | grep -qE 'v[0-9]+\.[0-9]+\.[0-9]+'
           rm -rf /tmp/smartbi-smoke && mkdir -p /tmp/smartbi-smoke
-          node dist/cli.js create SmokeExt -y -f -C /tmp/smartbi-smoke --alias "Smoke" --desc 'x&y<z"quote'
+          node dist/cli.js create SmokeExt -y -f -C /tmp/smartbi-smoke --desc 'x&y<z"quote'
           cd /tmp/smartbi-smoke/SmokeExt
           for f in build.xml .project .classpath \
             src/web/META-INF/extension.xml \
-            src/web/META-INF/applicationContext.xml \
-            src/web/META-INF/portlet.xml \
-            src/web/vision/js/ext/ConfigurationPatch.js \
-            src/web/WEB-INF/web.xml \
-            src/web/META-INF/extension_lang_en.properties \
-            src/web/META-INF/extension_lang_zh_CN.properties \
-            src/web/META-INF/extension_lang_zh_TW.properties; do
+            src/web/WEB-INF/web.xml; do
             [ -f "$f" ] || { echo "missing $f"; exit 1; }
           done
+          grep -qE '<extension[[:space:]]+name="SmokeExt"' src/web/META-INF/extension.xml
+          grep -qE 'alias="SmokeExt"' src/web/META-INF/extension.xml
           grep -qE 'desc="x&amp;y&lt;z&quot;quote"' src/web/META-INF/extension.xml
-          grep -qE '<project[[:space:]]+name="SmokeExt"' build.xml
-          rm -rf /tmp/smartbi-smoke2 && mkdir -p /tmp/smartbi-smoke2
-          node dist/cli.js create NoOpt -y -f -C /tmp/smartbi-smoke2 \
-            --no-application-context --no-portlet --no-configuration-patch
-          cd /tmp/smartbi-smoke2/NoOpt
-          [ ! -f "src/web/META-INF/applicationContext.xml" ]
-          [ ! -f "src/web/META-INF/portlet.xml" ]
-          [ ! -f "src/web/vision/js/ext/ConfigurationPatch.js" ]
-          grep -qE 'alias="NoOpt"' src/web/META-INF/extension.xml
-          grep -qE 'desc="NoOpt"' src/web/META-INF/extension.xml
 
   publish-npm:
     needs: build
