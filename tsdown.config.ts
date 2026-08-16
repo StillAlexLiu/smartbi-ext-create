@@ -11,7 +11,6 @@ const config: UserConfig = defineConfig({
   dts: true,
   sourcemap: false,
   minify: false,
-  splitting: true,
   banner: {
     js: '#!/usr/bin/env node',
   },
