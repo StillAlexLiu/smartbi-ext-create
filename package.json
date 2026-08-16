@@ -18,8 +18,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsdown build",
-    "dev": "tsdown watch",
+    "build": "tsdown --config tsdown.config.ts",
+    "dev": "tsdown --config tsdown.config.ts --watch",
     "start": "node ./dist/cli.js",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build",
@@ -36,7 +36,7 @@
   "author": "SmartBI Team",
   "license": "MIT",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "repository": {
     "type": "git",
@@ -60,6 +60,7 @@
     "@types/inquirer": "9.0.7",
     "@types/node": "20.10.5",
     "tsdown": "^0.22.14",
-    "typescript": "5.3.3"
+    "typescript": "5.3.3",
+    "unrun": "^0.3.1"
   }
 }

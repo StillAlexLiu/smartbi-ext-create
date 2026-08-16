@@ -18,7 +18,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18.x, 20.x]
+        node-version: [22.x]
 
     steps:
       - name: Checkout repository
@@ -77,7 +77,6 @@ jobs:
           [ -f "src/cli.ts" ] && echo "✓ src/cli.ts"
           [ -f "src/index.ts" ] && echo "✓ src/index.ts"
           [ -f "src/commands/create.ts" ] && echo "✓ src/commands/create.ts"
-          [ -f "src/utils/check-version.ts" ] && echo "✓ src/utils/check-version.ts"
           [ -f "src/types.ts" ] && echo "✓ src/types.ts"
           [ -f "tsconfig.json" ] && echo "✓ tsconfig.json"
           [ -f "tsdown.config.ts" ] && echo "✓ tsdown.config.ts"
@@ -91,10 +90,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 18.x
+      - name: Setup Node.js 22.x
         uses: actions/setup-node@v4
         with:
-          node-version: 18.x
+          node-version: 22.x
           cache: 'npm'
 
       - name: Install dependencies

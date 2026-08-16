@@ -27,7 +27,7 @@
 
 ### 环境要求
 
-- **Node.js ≥ 18.0.0**（tsdown 依赖 Rolldown/Rust 原生，构建推荐 Node 22+；运行 CLI 可 ≥18）
+- **Node.js ≥ 22.0.0**（tsdown 0.22+ / Rolldown / `unrun` 依赖该版本，npm 在该版本会正确拉取平台原生二进制）
 - **JDK 8+**（生成后编译扩展项目需要）
 - **Ant**（可选，SmartBI 扩展打包使用）
 
@@ -206,13 +206,13 @@ npm install
 # 类型检查
 npm run typecheck
 
-# 构建（tsdown build，生成 dist/cli.js + dist/index.js + 类型声明）
+# 构建（tsdown 加载 tsdown.config.ts，生成 dist/cli.js + dist/index.js + 类型声明 + 分片 chunk）
 npm run build
 
-# 监听模式
+# 监听模式（增量构建）
 npm run dev
 
-# 本地运行 CLI
+# 本地运行 CLI（需要先 build）
 npm start -- create my-ext -y -f
 
 # 全局链接（可在本机使用 `smartbi` 命令）
@@ -249,12 +249,13 @@ const config: UserConfig = defineConfig({
   dts: true,
   sourcemap: false,
   minify: false,
-  splitting: false,
+  splitting: true,
   banner: {
     js: '#!/usr/bin/env node',
   },
   platform: 'node',
   shims: true,
+  outExtensions: () => ({ js: '.js', dts: '.d.ts' }),
 });
 
 export default config;
@@ -340,19 +341,40 @@ git push origin main --follow-tags
 ## ❓ 常见问题
 
 <details>
-<summary>Q: 安装/构建时提示 Node.js 版本不满足要求，或 rolldown binary 找不到？</summary>
+<summary>Q: 构建时报错 `Failed to import module "unrun". Please ensure it is installed.`？</summary>
 <br>
 
-tsdown 依赖 Rolldown（Rust 原生二进制），**构建时要求 Node.js ≥ 22**（20/18 也能运行，但 npm 可选二进制与当前 Node 版本要匹配）。推荐使用 [nvm](https://github.com/nvm-sh/nvm)（macOS/Linux）或 [nvm-windows](https://github.com/coreybutler/nvm-windows) 切换版本：
+`tsdown 0.22.x` 加载配置文件时动态依赖 [`unrun`](https://www.npmjs.com/package/unrun)（quansync 同步化执行器），但没声明为自动依赖。修复方法：
 
 ```bash
-nvm install 22
-nvm use 22
-npm install      # 重新安装，让 npm 拉取匹配平台+Node 的 rolldown 原生二进制
+# 方式一：直接补装（本项目已经在 devDependencies 中添加）
+npm install -D unrun
+
+# 方式二：升级 Node 到 22+ 后重新 npm ci / npm install，让可选二进制正确安装
+nvm install 22 && nvm use 22
+rm -rf node_modules package-lock.json
+npm install
 npm run build
 ```
 
-仅**运行**已发布的 CLI 二进制（`npx smartbi create ...`）时最低 Node 18 即可。
+</details>
+
+<details>
+<summary>Q: 构建时 rolldown native binding 找不到（`Cannot find module './rolldown-binding.*.node'`）？</summary>
+<br>
+
+Rolldown 是 Rust 编写的原生模块，需要 npm 根据当前 Node 版本下载对应的 `@rolldown/binding-<platform>-<arch>` 可选依赖。请确保：
+
+1. Node.js **≥ 22.0.0**
+2. 使用官方 npm（不是 bun add 等其他包管理器）执行 `npm install` / `npm ci`
+3. 如果之前用了低版本 Node 装过依赖，清掉重来：
+
+```bash
+nvm install 22 && nvm use 22
+rm -rf node_modules package-lock.json
+npm install
+npm run build
+```
 
 </details>
 
