@@ -1,0 +1,65 @@
+{
+  "name": "smartbi",
+  "version": "1.0.0",
+  "description": "SmartBI 扩展开发脚手架工具 - A CLI tool for creating SmartBI extension projects",
+  "type": "module",
+  "bin": {
+    "smartbi": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown build",
+    "dev": "tsdown watch",
+    "start": "node ./dist/cli.js",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build",
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": [
+    "smartbi",
+    "cli",
+    "scaffold",
+    "extension",
+    "bi",
+    "dashboard"
+  ],
+  "author": "SmartBI Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/smartbi-team/smartbi-ext-create.git"
+  },
+  "bugs": {
+    "url": "https://github.com/smartbi-team/smartbi-ext-create/issues"
+  },
+  "homepage": "https://github.com/smartbi-team/smartbi-ext-create#readme",
+  "dependencies": {
+    "chalk": "5.3.0",
+    "commander": "11.1.0",
+    "figlet": "1.7.0",
+    "fs-extra": "11.2.0",
+    "inquirer": "9.2.12",
+    "ora": "7.0.1"
+  },
+  "devDependencies": {
+    "@types/figlet": "1.5.8",
+    "@types/fs-extra": "11.0.4",
+    "@types/inquirer": "9.0.7",
+    "@types/node": "20.10.5",
+    "tsdown": "^0.22.14",
+    "typescript": "5.3.3"
+  }
+}
