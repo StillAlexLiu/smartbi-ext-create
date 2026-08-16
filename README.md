@@ -195,7 +195,7 @@ ant dist
 | 交互 | Inquirer 9 | 交互式问答提示 |
 | 视觉 | Chalk / Ora / Figlet | 彩色输出 / Loading Spinner / Banner ASCII 艺术字 |
 | 文件 | fs-extra 11 | 跨平台目录与文件操作 |
-| CI/CD | GitHub Actions | `ci.yml` 常规检查、`release.yml` 自动发布 npm |
+| CI/CD | GitHub Actions | `npm-publish.yml` 统一：typecheck + build + tarball/bin 校验 + CLI 冒烟 + npm publish 跳过重复版本 |
 
 ### 本地开发命令
 
@@ -319,22 +319,20 @@ npm version major
 # 预发布版本（next 渠道）
 npm version 1.0.0-beta.1     # 或 alpha / rc
 
-# 推送并触发 release.yml
+# 推送到 main 分支（触发 npm-publish.yml 自动化）
 git push origin main --follow-tags
 ```
 
 ### 3. 自动化流程
 
-`release.yml` 会自动执行以下步骤：
+推送 `main` 分支后，`.github/workflows/npm-publish.yml` 会自动执行：
 
-1. **Node 22** 环境 `npm ci` → `typecheck` → `tsdown build`（tsdown/rolldown 需较新 Node）
-2. CLI 冒烟测试：`node dist/cli.js create smoke-ext -y -f` 并验证关键文件存在性
-3. 校验 `package.json` 版本与 `vX.Y.Z` tag 严格一致
-4. 校验 `dist/cli.js` 带 shebang、`dist/index.d.ts` 类型声明等产物完整性
-5. `npm publish --provenance --access public`
-   - 正式 tag（如 `v1.2.3`）→ `--tag latest`
-   - 含 `-` 的 tag（如 `v1.0.0-beta.1` / `alpha` / `rc`）→ `--tag next`
-6. 自动创建 GitHub Release 并生成自动 changelog
+1. **Node 26** 环境 `cache node_modules` → `npm ci`（未命中缓存时）→ `npm run typecheck` → `npm run build`
+2. **构建产物校验**：`dist/cli.js / index.js / index.d.ts` 存在、shebang 正确、`--version` 正常
+3. **Tarball 合规校验**：`npm pack` → 解压 → 断言 `bin.smartbi` 字段存在且指向的文件在 tarball 内（避免 npm publish 时被当作 invalid 移除）
+4. **CLI 冒烟测试**：`create SmokeExt -y -f`，检查 5 个核心文件存在、`name/alias` 正确注入、XML 特殊字符转义
+5. **版本跳过预检**：`npm view smartbi@<版本> version`，**已发布版本自动跳过**（不返回错误，workflow 保持绿）
+6. `npm publish`（注入 `NODE_AUTH_TOKEN + NPM_TOKEN`，`publishConfig.access=public`）
 
 ---
 
@@ -408,8 +406,8 @@ MIT © SmartBI Team
 
 ---
 
-[ci-badge]: https://github.com/smartbi-team/smartbi-ext-create/actions/workflows/ci.yml/badge.svg
-[ci-url]: https://github.com/smartbi-team/smartbi-ext-create/actions/workflows/ci.yml
+[ci-badge]: https://github.com/StillAlexLiu/smartbi-ext-create/actions/workflows/npm-publish.yml/badge.svg
+[ci-url]: https://github.com/StillAlexLiu/smartbi-ext-create/actions/workflows/npm-publish.yml
 [npm-version-badge]: https://img.shields.io/npm/v/smartbi.svg
 [npm-downloads-badge]: https://img.shields.io/npm/dt/smartbi.svg
 [npm-url]: https://www.npmjs.com/package/smartbi

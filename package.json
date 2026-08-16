@@ -4,7 +4,7 @@
   "description": "SmartBI 扩展开发脚手架工具 - A CLI tool for creating SmartBI extension projects",
   "type": "module",
   "bin": {
-    "smartbi": "./dist/cli.js"
+    "smartbi": "dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -40,12 +40,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/smartbi-team/smartbi-ext-create.git"
+    "url": "git+https://github.com/StillAlexLiu/smartbi-ext-create.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "bugs": {
-    "url": "https://github.com/smartbi-team/smartbi-ext-create/issues"
+    "url": "https://github.com/StillAlexLiu/smartbi-ext-create/issues"
   },
-  "homepage": "https://github.com/smartbi-team/smartbi-ext-create#readme",
+  "homepage": "https://github.com/StillAlexLiu/smartbi-ext-create#readme",
   "dependencies": {
     "chalk": "5.3.0",
     "commander": "11.1.0",
