@@ -1,6 +1,6 @@
 {
-  "name": "smartbi",
-  "version": "1.0.1",
+  "name": "smartbi-ext",
+  "version": "1.0.0",
   "description": "SmartBI 扩展开发脚手架工具 - A CLI tool for creating SmartBI extension projects",
   "type": "module",
   "bin": {

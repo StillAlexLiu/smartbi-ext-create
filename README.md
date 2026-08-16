@@ -34,19 +34,19 @@
 ### 方式一：通过 `npx` 直接使用（推荐）
 
 ```bash
-npx smartbi create <项目名称>
+npx smartbi-ext create <项目名称>
 ```
 
 例如：
 
 ```bash
-npx smartbi create my-smartbi-ext
+npx smartbi-ext create my-smartbi-ext
 ```
 
 ### 方式二：全局安装
 
 ```bash
-npm install -g smartbi
+npm install -g smartbi-ext
 
 smartbi create my-smartbi-ext
 ```
@@ -90,7 +90,7 @@ smartbi create <project-name> [options]
 ### 交互式示例
 
 ```bash
-$ npx smartbi create my-first-ext
+$ npx smartbi-ext create my-first-ext
 
 🚀 Smartbi 扩展项目脚手架
 
@@ -133,7 +133,7 @@ $ npx smartbi create my-first-ext
 ### 一条命令直接生成（无交互）
 
 ```bash
-npx smartbi create my-ext \
+npx smartbi-ext create my-ext \
   --alias "报表工具扩展" \
   --desc "企业级报表工具集" \
   -y -f
@@ -229,7 +229,7 @@ npm publish --dry-run
 dist/
 ├── cli.js       # CLI 入口，带 #!/usr/bin/env node shebang，作为 npm bin 执行
 ├── cli.d.ts
-├── index.js     # 库入口 ESM，可通过 import { create } from 'smartbi' 编程式调用
+├── index.js     # 库入口 ESM，可通过 import { create } from 'smartbi-ext' 编程式调用
 └── index.d.ts
 ```
 
@@ -268,7 +268,7 @@ export default config;
 除了 CLI 调用，本工具也可作为库在代码中使用：
 
 ```ts
-import { create } from 'smartbi';
+import { create } from 'smartbi-ext';
 
 await create('my-smartbi-ext', {
   force: true,
@@ -331,7 +331,7 @@ git push origin main --follow-tags
 2. **构建产物校验**：`dist/cli.js / index.js / index.d.ts` 存在、shebang 正确、`--version` 正常
 3. **Tarball 合规校验**：`npm pack` → 解压 → 断言 `bin.smartbi` 字段存在且指向的文件在 tarball 内（避免 npm publish 时被当作 invalid 移除）
 4. **CLI 冒烟测试**：`create SmokeExt -y -f`，检查 5 个核心文件存在、`name/alias` 正确注入、XML 特殊字符转义
-5. **版本跳过预检**：`npm view smartbi@<版本> version`，**已发布版本自动跳过**（不返回错误，workflow 保持绿）
+5. **版本跳过预检**：`npm view smartbi-ext@<版本> version`，**已发布版本自动跳过**（不返回错误，workflow 保持绿）
 6. `npm publish`（注入 `NODE_AUTH_TOKEN + NPM_TOKEN`，`publishConfig.access=public`）
 
 ---
@@ -408,8 +408,8 @@ MIT © SmartBI Team
 
 [ci-badge]: https://github.com/StillAlexLiu/smartbi-ext-create/actions/workflows/npm-publish.yml/badge.svg
 [ci-url]: https://github.com/StillAlexLiu/smartbi-ext-create/actions/workflows/npm-publish.yml
-[npm-version-badge]: https://img.shields.io/npm/v/smartbi.svg
-[npm-downloads-badge]: https://img.shields.io/npm/dt/smartbi.svg
-[npm-url]: https://www.npmjs.com/package/smartbi
+[npm-version-badge]: https://img.shields.io/npm/v/smartbi-ext.svg
+[npm-downloads-badge]: https://img.shields.io/npm/dt/smartbi-ext.svg
+[npm-url]: https://www.npmjs.com/package/smartbi-ext
 [license-badge]: https://img.shields.io/badge/License-MIT-yellow.svg
 [license-url]: https://opensource.org/licenses/MIT
