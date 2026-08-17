@@ -1,28 +1,51 @@
 import path from 'node:path';
-import os from 'node:os';
 import { spawn } from 'node:child_process';
 import fs from 'fs-extra';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import ora, { type Ora } from 'ora';
-import type { CreateOptions, CreateAnswers } from '../types';
+import type { CreateOptions, CreateAnswers, PackageManager } from '../types';
 
-async function runGit(
+const TOOLKIT_PKG_NAME = 'smartbi-ext-vue-toolkit';
+const PACKAGE_MANAGERS: PackageManager[] = ['npm', 'yarn', 'pnpm', 'bun'];
+const DEFAULT_PACKAGE_MANAGER: PackageManager = 'npm';
+
+function runCommand(
+  cmd: string,
   args: string[],
+  cwd?: string,
   spinner?: Ora
 ): Promise<void> {
-  if (spinner) spinner.stopAndPersist({ symbol: chalk.cyan('ℹ'), text: '调用系统 Git（如需私有仓库认证，请在终端输入凭据）' });
+  if (spinner) spinner.stopAndPersist({ symbol: chalk.cyan('ℹ'), text: `执行命令：${cmd} ${args.join(' ')}` });
   return new Promise((resolve, reject) => {
-    const child = spawn('git', args, { stdio: 'inherit' });
+    const child = spawn(cmd, args, { stdio: 'inherit', cwd, shell: process.platform === 'win32' });
     child.on('error', (err) => reject(err));
     child.on('exit', (code, signal) => {
       if (code === 0) return resolve();
       const msg = signal
-        ? `Git process killed by signal ${signal}`
-        : `git ${args[0]} exited with non-zero status ${code}`;
+        ? `Process killed by signal ${signal}`
+        : `Command \`${cmd} ${args[0]}\` exited with non-zero status ${code}`;
       reject(new Error(msg));
     });
   });
+}
+
+function runPackageManager(
+  manager: PackageManager,
+  args: string[],
+  cwd?: string,
+  spinner?: Ora
+): Promise<void> {
+  return runCommand(manager, args, cwd, spinner);
+}
+
+function detectPackageManager(): PackageManager {
+  const ua = process.env.npm_config_user_agent ?? '';
+  if (ua.includes('pnpm')) return 'pnpm';
+  if (ua.includes('yarn')) return 'yarn';
+  if (ua.includes('bun')) return 'bun';
+  if (ua.includes('npm')) return 'npm';
+  return DEFAULT_PACKAGE_MANAGER;
 }
 
 function escapeXmlAttr(value: string): string {
@@ -235,51 +258,64 @@ jsp_classes
 
 const LANG_FILE_COMMENT = '# SmartBI extension i18n resources\n';
 
-const DEFAULT_VUE_MODULE_REPO = 'https://git.alexcharts.top:7443/smartbi/vue-ext/smartbi-ext-build-tool.git';
-const DEFAULT_VUE_MODULE_BRANCH = 'main';
-
-const GIT_META_NAMES = new Set([
-  '.git',
-  '.gitignore',
-  '.gitattributes',
-  '.gitmodules',
-  '.github'
-]);
-
-async function copyCodeOnly(srcDir: string, destDir: string): Promise<void> {
-  await fs.ensureDir(destDir);
-  const entries = await fs.readdir(srcDir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (GIT_META_NAMES.has(entry.name)) continue;
-    const srcPath = path.join(srcDir, entry.name);
-    const destPath = path.join(destDir, entry.name);
-    if (entry.isDirectory()) {
-      await copyCodeOnly(srcPath, destPath);
-    } else {
-      await fs.copy(srcPath, destPath, { overwrite: true });
-    }
+function initArgs(manager: PackageManager): string[] {
+  switch (manager) {
+    case 'npm': return ['init', '-y'];
+    case 'yarn': return ['init', '-y'];
+    case 'pnpm': return ['init'];
+    case 'bun': return ['init'];
   }
 }
 
-async function cloneVueModule(
+function installArgs(manager: PackageManager, pkg: string, isDev: boolean): string[] {
+  const flag = isDev ? '-D' : '';
+  switch (manager) {
+    case 'npm': return ['install', flag, pkg].filter(Boolean);
+    case 'yarn': return ['add', flag, pkg].filter(Boolean);
+    case 'pnpm': return ['add', flag, pkg].filter(Boolean);
+    case 'bun': return ['add', flag, pkg].filter(Boolean);
+  }
+}
+
+function execBinArgs(manager: PackageManager, bin: string, binArgs: string[]): string[] {
+  switch (manager) {
+    case 'npm': return ['exec', '--', bin, ...binArgs];
+    case 'yarn': return [bin, ...binArgs];
+    case 'pnpm': return ['exec', bin, ...binArgs];
+    case 'bun': return [bin, ...binArgs];
+  }
+}
+
+async function setupVueModule(
   targetVueDir: string,
-  repo: string,
-  branch: string,
+  extName: string,
+  manager: PackageManager,
+  packageName: string,
   spinner?: Ora
 ): Promise<void> {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'smartbi-vue-ext-'));
-  try {
-    const args: string[] = ['clone', '--depth', '1'];
-    if (branch && branch.trim().length > 0) {
-      args.push('--branch', branch.trim(), '--single-branch');
-    }
-    args.push(repo, tempDir);
-    await runGit(args, spinner);
-    if (spinner) spinner.start(`正在复制 Vue 模块代码到 src/vue...`);
-    await copyCodeOnly(tempDir, targetVueDir);
-  } finally {
-    await fs.remove(tempDir);
+  await fs.ensureDir(targetVueDir);
+
+  if (spinner) spinner.start(`[Vue 模块] 使用 ${manager} 初始化 package.json...`);
+  await runPackageManager(manager, initArgs(manager), targetVueDir, spinner);
+
+  const pkgPath = path.join(targetVueDir, 'package.json');
+  if (await fs.pathExists(pkgPath)) {
+    const pkg: { name?: string; scripts?: Record<string, string> } = await fs.readJson(pkgPath);
+    if (packageName && packageName.trim().length > 0) pkg.name = packageName.trim();
+    else if (!pkg.name || pkg.name === 'vue') pkg.name = extName;
+    pkg.scripts = {
+      ...(pkg.scripts ?? {}),
+      dev: 'smartbi dev',
+      build: 'smartbi build'
+    };
+    await fs.writeJson(pkgPath, pkg, { spaces: 2 });
   }
+
+  if (spinner) spinner.start(`[Vue 模块] 安装 ${TOOLKIT_PKG_NAME}...`);
+  await runPackageManager(manager, installArgs(manager, TOOLKIT_PKG_NAME, true), targetVueDir, spinner);
+
+  if (spinner) spinner.start(`[Vue 模块] 执行 smartbi init...`);
+  await runPackageManager(manager, execBinArgs(manager, 'smartbi', ['init']), targetVueDir, spinner);
 }
 
 async function promptForOptions(
@@ -296,8 +332,8 @@ async function promptForOptions(
     portlet: options.portlet ?? true,
     configurationPatch: options.configurationPatch ?? true,
     vueModule: options.vueModule ?? false,
-    vueModuleRepo: options.vueModuleRepo ?? DEFAULT_VUE_MODULE_REPO,
-    vueModuleBranch: options.vueModuleBranch ?? DEFAULT_VUE_MODULE_BRANCH
+    packageManager: options.packageManager ?? detectPackageManager(),
+    vuePackageName: options.vuePackageName ?? extName
   };
 
   if (options.default) {
@@ -349,7 +385,7 @@ async function promptForOptions(
     {
       type: 'confirm',
       name: 'vueModule',
-      message: '是否添加新模块扩展包（从 Git 私有仓库拉取 Vue 模块代码到 src/vue）？',
+      message: '是否添加 Vue 前端新模块扩展（在 src/vue 创建基于 smartbi-ext-vue-toolkit 的工程）？',
       default: defaults.vueModule
     }
   );
@@ -360,20 +396,21 @@ async function promptForOptions(
   if (merged.vueModule) {
     const followups = await inquirer.prompt([
       {
-        type: 'input',
-        name: 'vueModuleRepo',
-        message: 'Vue 模块 Git 仓库地址：',
-        default: merged.vueModuleRepo
+        type: 'list',
+        name: 'packageManager',
+        message: '请选择 Vue 模块使用的包管理工具：',
+        choices: PACKAGE_MANAGERS.map((m) => ({ name: m, value: m })),
+        default: merged.packageManager
       },
       {
         type: 'input',
-        name: 'vueModuleBranch',
-        message: 'Vue 模块 Git 分支：',
-        default: merged.vueModuleBranch
+        name: 'vuePackageName',
+        message: 'Vue 模块 package.json 的 name 字段：',
+        default: merged.vuePackageName
       }
     ]);
-    merged.vueModuleRepo = followups.vueModuleRepo;
-    merged.vueModuleBranch = String(followups.vueModuleBranch ?? merged.vueModuleBranch).trim();
+    merged.packageManager = followups.packageManager;
+    merged.vuePackageName = String(followups.vuePackageName ?? merged.vuePackageName).trim() || extName;
   }
 
   return merged;
@@ -465,23 +502,18 @@ export async function create(projectName: string, options: CreateOptions): Promi
   }
 
   if (answers.vueModule) {
-    spinner = ora(`正在拉取 Vue 模块代码（${answers.vueModuleRepo} @ ${answers.vueModuleBranch}）...`).start();
+    spinner = ora(`正在初始化 Vue 前端模块（${answers.packageManager}）...`).start();
     const targetVueDir = path.join(targetDir, 'src', 'vue');
     try {
-      await cloneVueModule(targetVueDir, answers.vueModuleRepo, answers.vueModuleBranch, spinner);
-      spinner.succeed(chalk.green('Vue 模块代码拉取完成！'));
+      await setupVueModule(targetVueDir, projectName, answers.packageManager, answers.vuePackageName, spinner);
+      spinner.succeed(chalk.green('Vue 前端模块初始化完成！'));
     } catch (err) {
       const msg = (err as Error).message || String(err);
-      spinner.fail(chalk.red(`Vue 模块代码拉取失败：${msg}`));
+      spinner.fail(chalk.red(`Vue 前端模块初始化失败：${msg}`));
       console.log();
-      console.log(chalk.yellow('  提示：私有仓库拉取失败通常是 Git 凭据未配置。'));
-      console.log(chalk.yellow('  请检查：'));
-      console.log(chalk.gray('    1. 是否安装了 git 并且可在终端使用：git --version'));
-      console.log(chalk.gray('    2. 是否在本机 Git（或 Credential Manager）中配置了私有仓库的用户名/密码或 SSH Key'));
-      console.log(chalk.gray('    3. 仓库地址与分支是否正确'));
-      console.log();
-      console.log(chalk.gray(`  仓库：${answers.vueModuleRepo}`));
-      console.log(chalk.gray(`  分支：${answers.vueModuleBranch}`));
+      console.log(chalk.yellow('  提示：请检查所选包管理工具是否已正确安装，以及 npm 仓库连接是否正常。'));
+      console.log(chalk.gray(`  包管理工具：${answers.packageManager}`));
+      console.log(chalk.gray(`  目标目录：${targetVueDir}`));
       console.log();
       throw err;
     }
@@ -497,7 +529,7 @@ export async function create(projectName: string, options: CreateOptions): Promi
     console.log(chalk.gray(`    - ${dir}/`));
   }
   if (answers.vueModule) {
-    console.log(chalk.gray('    - src/vue/              Vue 前端新模块扩展（Git 拉取）'));
+    console.log(chalk.gray('    - src/vue/              Vue 前端新模块工程'));
   }
   console.log();
   console.log(chalk.cyan('  主要文件：'));
@@ -508,11 +540,17 @@ export async function create(projectName: string, options: CreateOptions): Promi
   if (answers.portlet) console.log(chalk.gray('    - portlet.xml             Portlet 配置'));
   if (answers.configurationPatch) console.log(chalk.gray('    - ConfigurationPatch.js   JS 扩展点'));
   if (answers.vueModule) {
-    console.log(chalk.gray('    - src/vue/                Vue 前端模块工程（代码来源：Git 私有仓库）'));
-    console.log(chalk.gray(`      · 仓库 ${answers.vueModuleRepo}`));
-    console.log(chalk.gray(`      · 分支 ${answers.vueModuleBranch}`));
+    console.log(chalk.gray('    - src/vue/                Vue 前端模块工程'));
+    console.log(chalk.gray(`      · 包管理工具：${answers.packageManager}`));
+    console.log(chalk.gray(`      · package.json name：${answers.vuePackageName}`));
+    console.log(chalk.gray(`      · 依赖：${TOOLKIT_PKG_NAME}（开发依赖）`));
+    console.log(chalk.gray(`      · npm scripts：dev → smartbi dev，build → smartbi build`));
   }
   console.log();
+  if (answers.vueModule) {
+    console.log(chalk.yellow(`  Vue 模块开发：进入 src/vue 目录，使用 ${answers.packageManager} run dev 启动开发，${answers.packageManager} run build 构建。`));
+    console.log();
+  }
   console.log(chalk.yellow('  下一步：导入 Eclipse 或直接使用 Ant 执行 dist 目标打包 .ext 文件'));
   console.log();
 }

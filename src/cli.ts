@@ -4,13 +4,12 @@ import chalk from 'chalk';
 import { createRequire } from 'node:module';
 
 import { create } from './commands/create';
-import type { CreateOptions } from './types';
+import type { CreateOptions, PackageManager } from './types';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json');
 
-const DEFAULT_VUE_MODULE_REPO = 'https://git.alexcharts.top:7443/smartbi/vue-ext/smartbi-ext-build-tool.git';
-const DEFAULT_VUE_MODULE_BRANCH = 'main';
+const DEFAULT_PACKAGE_MANAGER: PackageManager = 'npm';
 
 const program = new Command();
 
@@ -36,10 +35,10 @@ program
   .option('--no-application-context', '不生成 applicationContext.xml')
   .option('--no-portlet', '不生成 portlet.xml')
   .option('--no-configuration-patch', '不生成 ConfigurationPatch.js')
-  .option('--vue-module', '生成 src/vue 前端新模块扩展（从 Git 私有仓库拉取代码）')
+  .option('--vue-module', '在 src/vue 目录初始化 Vue 前端新模块工程')
   .option('--no-vue-module', '不添加 Vue 前端新模块扩展')
-  .option('--vue-module-repo <url>', `Vue 模块私有 Git 仓库地址（默认 ${DEFAULT_VUE_MODULE_REPO}）`, DEFAULT_VUE_MODULE_REPO)
-  .option('--vue-module-branch <branch>', `Vue 模块 Git 分支（默认 ${DEFAULT_VUE_MODULE_BRANCH}）`, DEFAULT_VUE_MODULE_BRANCH)
+  .option('--package-manager <manager>', `Vue 模块包管理工具：npm | yarn | pnpm | bun（默认 ${DEFAULT_PACKAGE_MANAGER}）`, DEFAULT_PACKAGE_MANAGER)
+  .option('--vue-package-name <name>', 'Vue 模块 package.json 的 name 字段（默认与项目名相同）')
   .action((projectName: string, options: CreateOptions) => {
     create(projectName, options).catch((err) => {
       console.error(chalk.red('\n创建项目失败：'), (err as Error).message);
@@ -66,8 +65,11 @@ program.on('--help', () => {
   console.log(chalk.gray('    # 指定别名和描述（跳过对应交互）'));
   console.log('    $ smartbi create my-ext --alias "我的扩展" --desc "自定义业务扩展"');
   console.log('');
-  console.log(chalk.gray('    # 指定 Vue 模块来源仓库地址与分支'));
-  console.log('    $ smartbi create my-ext --vue-module --vue-module-branch develop');
+  console.log(chalk.gray('    # 使用 pnpm 作为 Vue 模块的包管理工具'));
+  console.log('    $ smartbi create my-ext --vue-module --package-manager pnpm');
+  console.log('');
+  console.log(chalk.gray('    # 自定义 Vue 模块的 package.json name'));
+  console.log('    $ smartbi create my-ext --vue-module --vue-package-name @org/my-vue-ext');
   console.log('');
 });
 

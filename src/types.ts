@@ -1,3 +1,5 @@
+export type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun';
+
 export interface CreateOptions {
   force?: boolean;
   alias?: string;
@@ -6,8 +8,8 @@ export interface CreateOptions {
   portlet?: boolean;
   configurationPatch?: boolean;
   vueModule?: boolean;
-  vueModuleRepo?: string;
-  vueModuleBranch?: string;
+  packageManager?: PackageManager;
+  vuePackageName?: string;
   default?: boolean;
   cwd?: string;
 }
@@ -20,6 +22,6 @@ export interface CreateAnswers {
   portlet: boolean;
   configurationPatch: boolean;
   vueModule: boolean;
-  vueModuleRepo: string;
-  vueModuleBranch: string;
+  packageManager: PackageManager;
+  vuePackageName: string;
 }
