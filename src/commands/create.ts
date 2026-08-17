@@ -1,9 +1,14 @@
 import path from 'node:path';
+import os from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import fs from 'fs-extra';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import ora from 'ora';
-import type { CreateOptions } from '../types';
+import type { CreateOptions, CreateAnswers } from '../types';
+
+const execFileAsync = promisify(execFile);
 
 function escapeXmlAttr(value: string): string {
   return String(value ?? '')
@@ -215,23 +220,72 @@ jsp_classes
 
 const LANG_FILE_COMMENT = '# SmartBI extension i18n resources\n';
 
+const DEFAULT_VUE_MODULE_REPO = 'https://git.alexcharts.top:7443/smartbi/vue-ext/smartbi-ext-build-tool.git';
+const DEFAULT_VUE_MODULE_BRANCH = 'main';
+
+const GIT_META_NAMES = new Set([
+  '.git',
+  '.gitignore',
+  '.gitattributes',
+  '.gitmodules',
+  '.github'
+]);
+
+async function copyCodeOnly(srcDir: string, destDir: string): Promise<void> {
+  await fs.ensureDir(destDir);
+  const entries = await fs.readdir(srcDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (GIT_META_NAMES.has(entry.name)) continue;
+    const srcPath = path.join(srcDir, entry.name);
+    const destPath = path.join(destDir, entry.name);
+    if (entry.isDirectory()) {
+      await copyCodeOnly(srcPath, destPath);
+    } else {
+      await fs.copy(srcPath, destPath, { overwrite: true });
+    }
+  }
+}
+
+async function cloneVueModule(
+  targetVueDir: string,
+  repo: string,
+  branch: string
+): Promise<void> {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'smartbi-vue-ext-'));
+  try {
+    const args: string[] = ['clone', '--depth', '1'];
+    if (branch && branch.trim().length > 0) {
+      args.push('--branch', branch.trim(), '--single-branch');
+    }
+    args.push(repo, tempDir);
+    await execFileAsync('git', args);
+
+    await copyCodeOnly(tempDir, targetVueDir);
+  } finally {
+    await fs.remove(tempDir);
+  }
+}
+
 async function promptForOptions(
   extName: string,
   targetDir: string,
   exists: boolean,
   options: CreateOptions
-) {
-  const defaults = {
+): Promise<CreateAnswers> {
+  const defaults: CreateAnswers = {
     overwrite: false,
     alias: options.alias ?? extName,
     desc: options.desc ?? extName,
     applicationContext: options.applicationContext ?? true,
     portlet: options.portlet ?? true,
-    configurationPatch: options.configurationPatch ?? true
+    configurationPatch: options.configurationPatch ?? true,
+    vueModule: options.vueModule ?? false,
+    vueModuleRepo: options.vueModuleRepo ?? DEFAULT_VUE_MODULE_REPO,
+    vueModuleBranch: options.vueModuleBranch ?? DEFAULT_VUE_MODULE_BRANCH
   };
 
   if (options.default) {
-    return defaults;
+    return { ...defaults, vueModule: options.vueModule ?? true };
   }
 
   const questions = [];
@@ -275,11 +329,38 @@ async function promptForOptions(
       name: 'configurationPatch',
       message: '是否生成 ConfigurationPatch.js 文件？',
       default: defaults.configurationPatch
+    },
+    {
+      type: 'confirm',
+      name: 'vueModule',
+      message: '是否添加新模块扩展包（从 Git 私有仓库拉取 Vue 模块代码到 src/vue）？',
+      default: defaults.vueModule
     }
   );
 
-  const answers = await inquirer.prompt(questions);
-  return { ...defaults, ...answers };
+  const phase1Answers = await inquirer.prompt(questions);
+  const merged: CreateAnswers = { ...defaults, ...phase1Answers };
+
+  if (merged.vueModule) {
+    const followups = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'vueModuleRepo',
+        message: 'Vue 模块 Git 仓库地址：',
+        default: merged.vueModuleRepo
+      },
+      {
+        type: 'input',
+        name: 'vueModuleBranch',
+        message: 'Vue 模块 Git 分支：',
+        default: merged.vueModuleBranch
+      }
+    ]);
+    merged.vueModuleRepo = followups.vueModuleRepo;
+    merged.vueModuleBranch = String(followups.vueModuleBranch ?? merged.vueModuleBranch).trim();
+  }
+
+  return merged;
 }
 
 export async function create(projectName: string, options: CreateOptions): Promise<void> {
@@ -311,7 +392,7 @@ export async function create(projectName: string, options: CreateOptions): Promi
     await fs.remove(targetDir);
   }
 
-  const spinner = ora('正在创建项目结构...').start();
+  let spinner = ora('正在创建项目结构...').start();
 
   try {
     for (const dir of DIRS) {
@@ -361,10 +442,33 @@ export async function create(projectName: string, options: CreateOptions): Promi
       );
     }
 
-    spinner.succeed(chalk.green('项目创建完成！'));
+    spinner.succeed(chalk.green('项目结构创建完成！'));
   } catch (err) {
     spinner.fail(chalk.red(`项目创建失败：${(err as Error).message}`));
     throw err;
+  }
+
+  if (answers.vueModule) {
+    spinner = ora(`正在拉取 Vue 模块代码（${answers.vueModuleRepo} @ ${answers.vueModuleBranch}）...`).start();
+    const targetVueDir = path.join(targetDir, 'src', 'vue');
+    try {
+      await cloneVueModule(targetVueDir, answers.vueModuleRepo, answers.vueModuleBranch);
+      spinner.succeed(chalk.green('Vue 模块代码拉取完成！'));
+    } catch (err) {
+      const msg = (err as Error).message || String(err);
+      spinner.fail(chalk.red(`Vue 模块代码拉取失败：${msg}`));
+      console.log();
+      console.log(chalk.yellow('  提示：私有仓库拉取失败通常是 Git 凭据未配置。'));
+      console.log(chalk.yellow('  请检查：'));
+      console.log(chalk.gray('    1. 是否安装了 git 并且可在终端使用：git --version'));
+      console.log(chalk.gray('    2. 是否在本机 Git（或 Credential Manager）中配置了私有仓库的用户名/密码或 SSH Key'));
+      console.log(chalk.gray('    3. 仓库地址与分支是否正确'));
+      console.log();
+      console.log(chalk.gray(`  仓库：${answers.vueModuleRepo}`));
+      console.log(chalk.gray(`  分支：${answers.vueModuleBranch}`));
+      console.log();
+      throw err;
+    }
   }
 
   console.log();
@@ -376,6 +480,9 @@ export async function create(projectName: string, options: CreateOptions): Promi
   for (const dir of DIRS) {
     console.log(chalk.gray(`    - ${dir}/`));
   }
+  if (answers.vueModule) {
+    console.log(chalk.gray('    - src/vue/              Vue 前端新模块扩展（Git 拉取）'));
+  }
   console.log();
   console.log(chalk.cyan('  主要文件：'));
   console.log(chalk.gray('    - extension.xml           扩展配置'));
@@ -384,6 +491,11 @@ export async function create(projectName: string, options: CreateOptions): Promi
   if (answers.applicationContext) console.log(chalk.gray('    - applicationContext.xml  Spring 配置'));
   if (answers.portlet) console.log(chalk.gray('    - portlet.xml             Portlet 配置'));
   if (answers.configurationPatch) console.log(chalk.gray('    - ConfigurationPatch.js   JS 扩展点'));
+  if (answers.vueModule) {
+    console.log(chalk.gray('    - src/vue/                Vue 前端模块工程（代码来源：Git 私有仓库）'));
+    console.log(chalk.gray(`      · 仓库 ${answers.vueModuleRepo}`));
+    console.log(chalk.gray(`      · 分支 ${answers.vueModuleBranch}`));
+  }
   console.log();
   console.log(chalk.yellow('  下一步：导入 Eclipse 或直接使用 Ant 执行 dist 目标打包 .ext 文件'));
   console.log();

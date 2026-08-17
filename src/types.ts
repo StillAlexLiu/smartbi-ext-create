@@ -5,6 +5,9 @@ export interface CreateOptions {
   applicationContext?: boolean;
   portlet?: boolean;
   configurationPatch?: boolean;
+  vueModule?: boolean;
+  vueModuleRepo?: string;
+  vueModuleBranch?: string;
   default?: boolean;
   cwd?: string;
 }
@@ -16,4 +19,7 @@ export interface CreateAnswers {
   applicationContext: boolean;
   portlet: boolean;
   configurationPatch: boolean;
+  vueModule: boolean;
+  vueModuleRepo: string;
+  vueModuleBranch: string;
 }
