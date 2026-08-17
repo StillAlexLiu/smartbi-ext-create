@@ -1,14 +1,29 @@
 import path from 'node:path';
 import os from 'node:os';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
 import fs from 'fs-extra';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
-import ora from 'ora';
+import ora, { type Ora } from 'ora';
 import type { CreateOptions, CreateAnswers } from '../types';
 
-const execFileAsync = promisify(execFile);
+async function runGit(
+  args: string[],
+  spinner?: Ora
+): Promise<void> {
+  if (spinner) spinner.stopAndPersist({ symbol: chalk.cyan('ℹ'), text: '调用系统 Git（如需私有仓库认证，请在终端输入凭据）' });
+  return new Promise((resolve, reject) => {
+    const child = spawn('git', args, { stdio: 'inherit' });
+    child.on('error', (err) => reject(err));
+    child.on('exit', (code, signal) => {
+      if (code === 0) return resolve();
+      const msg = signal
+        ? `Git process killed by signal ${signal}`
+        : `git ${args[0]} exited with non-zero status ${code}`;
+      reject(new Error(msg));
+    });
+  });
+}
 
 function escapeXmlAttr(value: string): string {
   return String(value ?? '')
@@ -249,7 +264,8 @@ async function copyCodeOnly(srcDir: string, destDir: string): Promise<void> {
 async function cloneVueModule(
   targetVueDir: string,
   repo: string,
-  branch: string
+  branch: string,
+  spinner?: Ora
 ): Promise<void> {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'smartbi-vue-ext-'));
   try {
@@ -258,8 +274,8 @@ async function cloneVueModule(
       args.push('--branch', branch.trim(), '--single-branch');
     }
     args.push(repo, tempDir);
-    await execFileAsync('git', args);
-
+    await runGit(args, spinner);
+    if (spinner) spinner.start(`正在复制 Vue 模块代码到 src/vue...`);
     await copyCodeOnly(tempDir, targetVueDir);
   } finally {
     await fs.remove(tempDir);
@@ -452,7 +468,7 @@ export async function create(projectName: string, options: CreateOptions): Promi
     spinner = ora(`正在拉取 Vue 模块代码（${answers.vueModuleRepo} @ ${answers.vueModuleBranch}）...`).start();
     const targetVueDir = path.join(targetDir, 'src', 'vue');
     try {
-      await cloneVueModule(targetVueDir, answers.vueModuleRepo, answers.vueModuleBranch);
+      await cloneVueModule(targetVueDir, answers.vueModuleRepo, answers.vueModuleBranch, spinner);
       spinner.succeed(chalk.green('Vue 模块代码拉取完成！'));
     } catch (err) {
       const msg = (err as Error).message || String(err);
