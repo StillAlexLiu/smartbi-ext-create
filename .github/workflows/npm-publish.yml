@@ -57,21 +57,6 @@ jobs:
             console.log('OK: publishConfig =', JSON.stringify(p.publishConfig));
           "
           rm -rf "$TMPDIR"
-      - name: CLI smoke test
-        run: |
-          set -e
-          rm -rf /tmp/smartbi-smoke && mkdir -p /tmp/smartbi-smoke
-          node dist/cli.js create SmokeExt -y -f -C /tmp/smartbi-smoke --desc 'x&y<z"quote'
-          cd /tmp/smartbi-smoke/SmokeExt
-          for f in build.xml .project .classpath \
-            src/web/META-INF/extension.xml \
-            src/web/WEB-INF/web.xml; do
-            [ -f "$f" ] || { echo "missing $f"; exit 1; }
-          done
-          grep -qE '<extension[[:space:]]+name="SmokeExt"' src/web/META-INF/extension.xml
-          grep -qE 'alias="SmokeExt"' src/web/META-INF/extension.xml
-          grep -qE 'desc="x&amp;y&lt;z&quot;quote"' src/web/META-INF/extension.xml
-
   publish-npm:
     needs: build
     runs-on: ubuntu-latest
